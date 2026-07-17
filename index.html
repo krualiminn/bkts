@@ -1,0 +1,750 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>แดชบอร์ดสรุปสั่งเสื้อกีฬาสี - โรงเรียนบ้านโคกตา</title>
+    
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Kanit:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
+    <script src="https://unpkg.com/@phosphor-icons/web"></script>
+
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    fontFamily: {
+                        sans: ['Kanit', 'sans-serif'],
+                    },
+                    colors: {
+                        brand: {
+                            50: '#f0fdf4',
+                            100: '#dcfce7',
+                            500: '#22c55e',
+                            600: '#16a34a',
+                            700: '#15803d',
+                            900: '#14532d',
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        body { font-family: 'Kanit', sans-serif; background-color: #f8fafc; }
+        .custom-scrollbar::-webkit-scrollbar { width: 6px; height: 6px; }
+        .custom-scrollbar::-webkit-scrollbar-track { background: #f1f1f1; border-radius: 4px; }
+        .custom-scrollbar::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; }
+        .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
+        .glass-card {
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -1px rgba(0, 0, 0, 0.03);
+        }
+        
+        #loading-overlay {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(255,255,255,0.95); z-index: 50;
+            display: flex; flex-direction: column; justify-content: center; align-items: center;
+        }
+        .spinner {
+            border: 4px solid #f3f3f3; border-top: 4px solid #16a34a;
+            border-radius: 50%; width: 50px; height: 50px; animation: spin 1s linear infinite;
+        }
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+    </style>
+</head>
+<body class="text-slate-800 antialiased">
+
+    <div id="loading-overlay">
+        <div class="spinner mb-4"></div>
+        <h2 class="text-xl font-semibold text-slate-700">กำลังดึงข้อมูล...</h2>
+        <p class="text-slate-500 mt-2 text-sm" id="loading-text">กำลังเชื่อมต่อกับ Google Sheets</p>
+    </div>
+
+    <div id="toast" class="fixed top-5 right-5 transform translate-x-full transition-transform duration-300 z-50 max-w-sm w-full bg-white rounded-lg shadow-lg border-l-4 p-4 flex items-start hidden">
+        <i id="toast-icon" class="ph text-2xl mr-3"></i>
+        <div>
+            <h4 id="toast-title" class="font-semibold text-slate-800">Title</h4>
+            <p id="toast-message" class="text-sm text-slate-600 mt-1">Message</p>
+        </div>
+        <button onclick="hideToast()" class="ml-auto text-slate-400 hover:text-slate-600">
+            <i class="ph ph-x"></i>
+        </button>
+    </div>
+
+    <nav class="bg-brand-700 text-white shadow-md sticky top-0 z-40">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="flex items-center justify-between h-16">
+                <div class="flex items-center gap-3">
+                    <div class="bg-white p-2 rounded-full">
+                        <i class="ph ph-t-shirt text-brand-700 text-xl"></i>
+                    </div>
+                    <div>
+                        <h1 class="text-lg font-semibold tracking-wide">ระบบสรุปสั่งเสื้อกีฬาสี</h1>
+                        <p class="text-xs text-brand-100">โรงเรียนบ้านโคกตา</p>
+                    </div>
+                </div>
+                <div class="hidden md:flex gap-4 items-center">
+                    <button onclick="window.print()" class="flex items-center gap-2 bg-brand-600 hover:bg-brand-500 transition px-4 py-2 rounded-md text-sm">
+                        <i class="ph ph-printer"></i> พิมพ์ / PDF
+                    </button>
+                </div>
+            </div>
+        </div>
+    </nav>
+
+    <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-6">
+        
+        <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
+            <div class="glass-card rounded-xl p-5 border-l-4 border-l-blue-500 flex items-center justify-between">
+                <div>
+                    <p class="text-sm text-slate-500 font-medium">ยอดสั่งทั้งหมด</p>
+                    <h3 class="text-3xl font-bold text-slate-800 mt-1" id="stat-total">0</h3>
+                </div>
+                <div class="h-12 w-12 bg-blue-100 rounded-full flex items-center justify-center text-blue-600">
+                    <i class="ph ph-users text-2xl"></i>
+                </div>
+            </div>
+            
+            <div class="glass-card rounded-xl p-5 border-l-4 border-l-emerald-500 flex items-center justify-between">
+                <div>
+                    <p class="text-sm text-slate-500 font-medium">เสื้อคอกลม</p>
+                    <h3 class="text-3xl font-bold text-slate-800 mt-1" id="stat-round">0</h3>
+                </div>
+                <div class="h-12 w-12 bg-emerald-100 rounded-full flex items-center justify-center text-emerald-600">
+                    <i class="ph ph-t-shirt text-2xl"></i>
+                </div>
+            </div>
+
+            <div class="glass-card rounded-xl p-5 border-l-4 border-l-orange-500 flex items-center justify-between">
+                <div>
+                    <p class="text-sm text-slate-500 font-medium">เสื้อคอปก</p>
+                    <h3 class="text-3xl font-bold text-slate-800 mt-1" id="stat-polo">0</h3>
+                </div>
+                <div class="h-12 w-12 bg-orange-100 rounded-full flex items-center justify-center text-orange-600">
+                    <i class="ph ph-shirt-folded text-2xl"></i>
+                </div>
+            </div>
+
+            <div class="glass-card rounded-xl p-5 border-l-4 border-l-purple-500 flex items-center justify-between">
+                <div>
+                    <p class="text-sm text-slate-500 font-medium">อัพเดทล่าสุด</p>
+                    <h3 class="text-lg font-bold text-slate-800 mt-2" id="stat-time">-</h3>
+                </div>
+                <div class="h-12 w-12 bg-purple-100 rounded-full flex items-center justify-center text-purple-600">
+                    <i class="ph ph-clock text-2xl"></i>
+                </div>
+            </div>
+        </div>
+
+        <div class="glass-card rounded-xl p-5">
+            <div class="flex flex-col xl:flex-row xl:items-center justify-between gap-4">
+                <h2 class="text-lg font-semibold flex items-center gap-2 whitespace-nowrap"><i class="ph ph-funnel text-brand-600"></i> คัดกรองข้อมูล</h2>
+                
+                <!-- เปลี่ยนเป็น grid-cols-2 หรือ 5 ตามความเหมาะสมของหน้าจอ -->
+                <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-5 gap-3 flex-1 w-full xl:ml-8">
+                    <select id="filter-color" class="w-full border-slate-300 rounded-lg shadow-sm focus:border-brand-500 focus:ring-brand-500 p-2.5 text-sm outline-none border bg-slate-50">
+                        <option value="all">ทุกสี</option>
+                    </select>
+                    
+                    <select id="filter-class" class="w-full border-slate-300 rounded-lg shadow-sm focus:border-brand-500 focus:ring-brand-500 p-2.5 text-sm outline-none border bg-slate-50">
+                        <option value="all">ทุกระดับชั้น</option>
+                    </select>
+                    
+                    <select id="filter-room" class="w-full border-slate-300 rounded-lg shadow-sm focus:border-brand-500 focus:ring-brand-500 p-2.5 text-sm outline-none border bg-slate-50">
+                        <option value="all">ทุกห้อง</option>
+                    </select>
+                    
+                    <select id="filter-size" class="w-full border-slate-300 rounded-lg shadow-sm focus:border-red-500 focus:ring-red-500 p-2.5 text-sm outline-none border bg-slate-50">
+                        <option value="all">ทุกไซส์</option>
+                        <option value="missing" class="text-red-600 font-bold">⚠️ หาคนที่ไม่มีไซส์</option>
+                    </select>
+                    
+                    <button onclick="resetFilters()" class="w-full bg-slate-200 hover:bg-slate-300 text-slate-700 py-2.5 rounded-lg text-sm font-medium transition flex items-center justify-center gap-2">
+                        <i class="ph ph-arrow-counter-clockwise"></i> ล้างตัวกรอง
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            <div class="glass-card rounded-xl p-5 lg:col-span-1 flex flex-col">
+                <h3 class="text-md font-semibold text-slate-700 mb-4 text-center">สัดส่วนการสั่งตามสี</h3>
+                <div class="relative flex-1 w-full flex justify-center items-center h-64">
+                    <canvas id="colorChart"></canvas>
+                </div>
+            </div>
+            
+            <div class="glass-card rounded-xl p-5 lg:col-span-2 flex flex-col">
+                <h3 class="text-md font-semibold text-slate-700 mb-4 text-center">จำนวนการสั่งตามไซส์เสื้อ</h3>
+                <div class="relative flex-1 w-full h-64">
+                    <canvas id="sizeChart"></canvas>
+                </div>
+            </div>
+        </div>
+
+        <div class="glass-card rounded-xl p-0 overflow-hidden border border-slate-200">
+            <div class="bg-brand-50 border-b border-brand-100 p-4 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
+                <div>
+                    <h2 class="text-lg font-semibold text-brand-900 flex items-center gap-2">
+                        <i class="ph ph-storefront text-xl"></i> ตารางสรุปสั่งร้านทำเสื้อ
+                    </h2>
+                    <p class="text-xs text-brand-700 mt-1">สรุปยอดรวมแยกตามสี ประเภทคอ และไซส์ เพื่อใช้สั่งผลิต</p>
+                </div>
+                <button onclick="copyTable('shop-matrix-table')" class="text-sm bg-white border border-brand-200 text-brand-700 hover:bg-brand-50 px-3 py-1.5 rounded flex items-center gap-1 shadow-sm transition whitespace-nowrap">
+                    <i class="ph ph-copy"></i> คัดลอกตาราง
+                </button>
+            </div>
+            <div class="overflow-x-auto custom-scrollbar p-4">
+                <table id="shop-matrix-table" class="w-full text-sm text-left text-slate-600 border-collapse min-w-max">
+                    <thead class="text-xs text-slate-700 uppercase bg-slate-100">
+                        <tr id="matrix-head">
+                            <!-- Headers dynamically generated -->
+                        </tr>
+                    </thead>
+                    <tbody id="matrix-body" class="divide-y divide-slate-200">
+                        <!-- Rows dynamically generated -->
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <div class="glass-card rounded-xl p-0 overflow-hidden border border-slate-200 mb-10">
+            <div class="bg-white border-b border-slate-200 p-4 flex justify-between items-center">
+                <h2 class="text-lg font-semibold text-slate-800 flex items-center gap-2">
+                    <i class="ph ph-list-dashes text-xl text-slate-500"></i> รายละเอียดข้อมูลการสั่งซื้อ
+                </h2>
+                <div class="text-sm text-slate-500 bg-slate-100 px-3 py-1 rounded-full">
+                    แสดง <span id="showing-count" class="font-bold text-brand-600">0</span> รายการ
+                </div>
+            </div>
+            <div class="overflow-x-auto custom-scrollbar" style="max-height: 500px;">
+                <table class="w-full text-sm text-left text-slate-600 min-w-[600px]">
+                    <thead class="text-xs text-slate-700 uppercase bg-slate-50 sticky top-0 z-10 shadow-sm">
+                        <tr>
+                            <th scope="col" class="px-6 py-4 font-semibold">ที่</th>
+                            <th scope="col" class="px-6 py-4 font-semibold">ชื่อ-นามสกุล</th>
+                            <th scope="col" class="px-6 py-4 font-semibold text-center">ชั้น</th>
+                            <th scope="col" class="px-6 py-4 font-semibold text-center">ห้อง</th>
+                            <th scope="col" class="px-6 py-4 font-semibold text-center">สีคณะ</th>
+                            <th scope="col" class="px-6 py-4 font-semibold text-center">คอเสื้อ</th>
+                            <th scope="col" class="px-6 py-4 font-semibold text-center">ไซส์</th>
+                        </tr>
+                    </thead>
+                    <tbody id="data-table-body" class="divide-y divide-slate-100">
+                        <!-- Data rows dynamically generated -->
+                    </tbody>
+                </table>
+                <div id="empty-state" class="hidden flex flex-col items-center justify-center py-12">
+                    <i class="ph ph-magnifying-glass text-4xl text-slate-300 mb-3"></i>
+                    <p class="text-slate-500">ไม่พบข้อมูลที่ตรงกับเงื่อนไขการค้นหา</p>
+                </div>
+            </div>
+        </div>
+        
+    </main>
+
+    <script>
+        const sheetId = '11FWxHN-Mnv17_iA8CzkgzFdk7YoknET0p7OK2Rdj6Ss';
+        // เปลี่ยนลิงก์ดึงข้อมูลเพื่อแก้ปัญหา Google ซ่อนตัวอักษรในคอลัมน์ตัวเลข
+        const csvUrl = `https://docs.google.com/spreadsheets/d/${sheetId}/export?format=csv`;
+
+        let allData = [];
+        let filteredData = [];
+        let chartInstances = {};
+
+        let uniqueColors = [];
+        let uniqueClasses = [];
+        let uniqueRooms = [];
+        let uniqueSizes = [];
+        
+        // กำหนดลำดับไซส์ตามที่ใช้งานจริงอย่างเคร่งครัด
+        const sizeOrder = ['1', '2', '3', 'SS', 'S', 'M', 'L', 'XL', '2XL', '3XL', '4XL', '5XL', 'อก52']; 
+
+        const colorPalette = {
+            'แดง': '#ef4444', 'สีแดง': '#ef4444',
+            'เหลือง': '#eab308', 'สีเหลือง': '#eab308',
+            'ฟ้า': '#3b82f6', 'น้ำเงิน': '#2563eb', 'สีฟ้า': '#3b82f6', 'สีน้ำเงิน': '#2563eb',
+            'เขียว': '#22c55e', 'สีเขียว': '#22c55e',
+            'ม่วง': '#a855f7', 'สีม่วง': '#a855f7',
+            'ชมพู': '#ec4899', 'สีชมพู': '#ec4899',
+            'ส้ม': '#f97316', 'สีส้ม': '#f97316',
+        };
+
+        window.onload = () => {
+            fetchData();
+            const now = new Date();
+            document.getElementById('stat-time').innerText = `${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')} น.`;
+            
+            document.getElementById('filter-color').addEventListener('change', applyFilters);
+            document.getElementById('filter-class').addEventListener('change', applyFilters);
+            document.getElementById('filter-room').addEventListener('change', applyFilters);
+            document.getElementById('filter-size').addEventListener('change', applyFilters);
+        };
+
+        function fetchData() {
+            Papa.parse(csvUrl, {
+                download: true,
+                header: true,
+                skipEmptyLines: 'greedy',
+                complete: function(results) {
+                    if(results.data.length > 0 && Object.keys(results.data[0])[0].toLowerCase().includes('html')) {
+                        handleFetchError("ไฟล์ Google Sheet ไม่ได้เปิดแชร์เป็น 'ทุกคนที่มีลิงก์ (Public)'");
+                        return;
+                    }
+                    if(results.errors && results.errors.length > 0 && results.data.length === 0) {
+                        handleFetchError("ไม่สามารถดึงข้อมูลได้ โปรดตรวจสอบลิงก์");
+                        return;
+                    }
+                    
+                    processData(results.data);
+                    showToast("สำเร็จ", "ดึงข้อมูลจาก Google Sheet เรียบร้อยแล้ว", "success");
+                    hideLoading();
+                },
+                error: function(err) {
+                    console.error("PapaParse Error:", err);
+                    handleFetchError("เกิดข้อผิดพลาดในการเชื่อมต่อเครือข่าย");
+                }
+            });
+        }
+
+        function handleFetchError(reason) {
+            document.getElementById('loading-text').innerText = "กำลังสร้างข้อมูลจำลอง...";
+            showToast("การเข้าถึงถูกจำกัด", `${reason} <br/>ระบบกำลังแสดง <b>"ข้อมูลจำลอง"</b> เพื่อทดสอบระบบ`, "warning");
+            
+            setTimeout(() => {
+                const mockData = generateMockData();
+                processData(mockData);
+                hideLoading();
+            }, 1000);
+        }
+
+        function generateMockData() {
+            const data = [];
+            const firstNames = ['สมชาย', 'สมหญิง', 'มานะ', 'มานี', 'ปิติ', 'ชูใจ'];
+            const lastNames = ['รักดี', 'ใจสู้', 'มีทรัพย์', 'พาเพลิน'];
+            const colors = ['แดง', 'เหลือง', 'ฟ้า', 'เขียว', 'ม่วง'];
+            // ใช้ไซส์ที่มีในระบบจำลองด้วย
+            const mockSizes = ['S', 'M', 'L', 'XL', '2XL', '1', '2', '3', 'อก52', ''];
+            
+            for(let i=1; i<=150; i++) {
+                data.push({
+                    'ชื่อ': firstNames[Math.floor(Math.random() * firstNames.length)],
+                    'สกุล': lastNames[Math.floor(Math.random() * lastNames.length)],
+                    'ชั้น': `ป.${Math.floor(Math.random() * 6) + 1}`,
+                    'ห้อง': `${Math.floor(Math.random() * 3) + 1}`,
+                    'สี': colors[Math.floor(Math.random() * colors.length)],
+                    'คอ': Math.random() > 0.5 ? 'คอกลม' : 'คอปก',
+                    'ไซส์': mockSizes[Math.floor(Math.random() * mockSizes.length)]
+                });
+            }
+            return data;
+        }
+
+        function processData(rawData) {
+            allData = [];
+            
+            rawData.forEach(row => {
+                const keys = Object.keys(row);
+                
+                // อัปเกรด: ฟังก์ชันหาคอลัมน์ที่แม่นยำขึ้น ค้นหาคอลัมน์ที่มีข้อมูลจริงๆ ป้องกันคอลัมน์ซ้ำหรือว่างเปล่า
+                const findValidValue = (keywords) => {
+                    let matchedKeys = keys.filter(k => keywords.some(kw => k.toLowerCase().includes(kw.toLowerCase())));
+                    
+                    // จัดลำดับความสำคัญ ถ้าชื่อคอลัมน์ตรงเป๊ะๆ ให้อ่านก่อน
+                    matchedKeys.sort((a, b) => {
+                        const aExact = keywords.some(kw => a.toLowerCase() === kw.toLowerCase());
+                        const bExact = keywords.some(kw => b.toLowerCase() === kw.toLowerCase());
+                        if(aExact && !bExact) return -1;
+                        if(!aExact && bExact) return 1;
+                        return 0;
+                    });
+
+                    // วนหาช่องที่มีข้อมูลจริงๆ (ไม่ว่างเปล่า)
+                    for (const k of matchedKeys) {
+                        if (row[k] !== undefined && row[k] !== null && row[k].toString().trim() !== '') {
+                            return row[k];
+                        }
+                    }
+                    return matchedKeys.length > 0 ? (row[matchedKeys[0]] || "") : "";
+                };
+                
+                // 1. จัดการชื่อ-นามสกุล
+                let fNameKey = keys.find(k => k === 'ชื่อ' || (k.includes('ชื่อ') && !k.includes('สกุล')));
+                let lNameKey = keys.find(k => k === 'สกุล' || k.includes('สกุล') || k.includes('นามสกุล'));
+                
+                let fullName = '';
+                if(fNameKey && lNameKey && row[fNameKey]) {
+                    fullName = `${row[fNameKey].trim()} ${row[lNameKey] ? row[lNameKey].trim() : ''}`.trim();
+                } else if(findValidValue(['ชื่อ-สกุล', 'ชื่อ - สกุล', 'ชื่อนามสกุล', 'ชื่อ-นามสกุล', 'ชื่อ'])) {
+                    fullName = findValidValue(['ชื่อ-สกุล', 'ชื่อ - สกุล', 'ชื่อนามสกุล', 'ชื่อ-นามสกุล', 'ชื่อ']).toString().trim();
+                } else {
+                    fullName = "ไม่ระบุชื่อ";
+                }
+
+                // ข้ามแถวที่ว่างเปล่าจริงๆ
+                if(fullName === "ไม่ระบุชื่อ" && !findValidValue(['ชั้น', 'ห้อง'])) return; 
+
+                // 2. จัดการชั้นและห้อง (สกัดเฉพาะตัวเลข)
+                const rawClass = findValidValue(['ชั้น']) || "";
+                let cleanClass = rawClass.toString().replace(/[^0-9]/g, '');
+                cleanClass = cleanClass ? `ป.${cleanClass}` : "ไม่ระบุ";
+
+                const rawRoom = findValidValue(['ห้อง', 'ทับ']) || "";
+                let cleanRoom = rawRoom.toString().replace(/[^0-9]/g, '');
+                cleanRoom = cleanRoom ? cleanRoom : "ไม่ระบุ";
+
+                const cColor = findValidValue(['สี']) || "ไม่ระบุ";
+
+                // 3. จัดการประเภทคอเสื้อ
+                const rawCollar = findValidValue(['คอ', 'ประเภท']) || "";
+                let cleanCollar = rawCollar.toString().trim();
+                if(cleanCollar.includes('กลม')) cleanCollar = 'คอกลม';
+                else if(cleanCollar.includes('ปก') || cleanCollar.toLowerCase().includes('polo')) cleanCollar = 'คอปก';
+                else cleanCollar = "ไม่ระบุ";
+                
+                // 4. จัดการไซส์ (สำคัญมาก - อัปเกรดให้ครอบคลุมการพิมพ์ทุกรูปแบบและดักอักขระแปลกๆ)
+                const rawSize = findValidValue(['ไซส์', 'ไซต์', 'ไซด์', 'ไซด', 'ไซส', 'ขนาด', 'size', 'เบอร์']) || "";
+                
+                // ลบอักขระซ่อนเร้น (Zero-width space), ตัดช่องว่างทั้งหมด, และแปลงเป็นตัวพิมพ์ใหญ่
+                let cleanSize = rawSize.toString().replace(/[\u200B-\u200D\uFEFF]/g, '').trim().toUpperCase().replace(/\s+/g, ''); 
+                
+                // ตัดคำนำหน้าที่คนอาจจะพิมพ์เกินมา เช่น "ไซส์S", "เบอร์M", "SIZE:L"
+                cleanSize = cleanSize.replace(/^(ไซส์|ไซต์|ไซด์|ขนาด|SIZE|เบอร์|NO\.?)/, '').replace(/^:/, '');
+                
+                // ลบจุดทิ้ง เผื่อคนพิมพ์ "S."
+                cleanSize = cleanSize.replace(/\.$/, '');
+
+                // แปลงคำผิด/ความหลากหลาย ให้ตรงกับมาตรฐาน
+                if(cleanSize === 'XXL') cleanSize = '2XL';
+                if(cleanSize === 'XXXL') cleanSize = '3XL';
+                if(cleanSize === 'XXXXL') cleanSize = '4XL';
+                if(cleanSize === 'XXXXXL') cleanSize = '5XL';
+                if(cleanSize === 'อก52') cleanSize = 'อก52'; 
+                
+                if(cleanSize === '' || cleanSize === '-' || cleanSize === 'ไม่มี' || cleanSize === 'ไม่ระบุ') cleanSize = 'ไม่ระบุ';
+
+                allData.push({
+                    fullName: fullName,
+                    class: cleanClass,
+                    room: cleanRoom,
+                    color: cColor.toString().trim(),
+                    collar: cleanCollar,
+                    size: cleanSize
+                });
+            });
+
+            // สร้างตัวเลือกสำหรับ Dropdown
+            uniqueColors = [...new Set(allData.map(item => item.color))].filter(v => v !== "ไม่ระบุ" && v !== "").sort();
+            uniqueClasses = [...new Set(allData.map(item => item.class))].filter(v => v !== "ไม่ระบุ" && v !== "").sort((a,b) => a.localeCompare(b));
+            uniqueRooms = [...new Set(allData.map(item => item.room))].filter(v => v !== "ไม่ระบุ" && v !== "").sort((a,b) => a - b);
+            
+            uniqueSizes = [...new Set(allData.map(item => item.size))].filter(v => v !== "ไม่ระบุ" && v !== "");
+            uniqueSizes.sort((a, b) => {
+                let idxA = sizeOrder.indexOf(a); let idxB = sizeOrder.indexOf(b);
+                if (idxA === -1 && idxB === -1) return a.localeCompare(b);
+                if (idxA === -1) return 1; if (idxB === -1) return -1;
+                return idxA - idxB;
+            });
+
+            populateFilters();
+            filteredData = [...allData];
+            updateDashboard();
+        }
+
+        function populateFilters() {
+            const colorSel = document.getElementById('filter-color');
+            const classSel = document.getElementById('filter-class');
+            const roomSel = document.getElementById('filter-room');
+            const sizeSel = document.getElementById('filter-size');
+
+            // Clear existing options except default
+            colorSel.innerHTML = '<option value="all">ทุกสี</option>';
+            classSel.innerHTML = '<option value="all">ทุกระดับชั้น</option>';
+            roomSel.innerHTML = '<option value="all">ทุกห้อง</option>';
+            sizeSel.innerHTML = '<option value="all">ทุกไซส์</option><option value="missing" class="text-red-600 font-bold">⚠️ หาคนที่ไม่มีไซส์</option>';
+
+            uniqueColors.forEach(c => { colorSel.innerHTML += `<option value="${c}">${c}</option>`; });
+            uniqueClasses.forEach(c => { classSel.innerHTML += `<option value="${c}">${c}</option>`; });
+            uniqueRooms.forEach(c => { roomSel.innerHTML += `<option value="${c}">ห้อง /${c}</option>`; });
+            uniqueSizes.forEach(s => { sizeSel.innerHTML += `<option value="${s}">ไซส์ ${s}</option>`; });
+        }
+
+        function applyFilters() {
+            const fColor = document.getElementById('filter-color').value;
+            const fClass = document.getElementById('filter-class').value;
+            const fRoom = document.getElementById('filter-room').value;
+            const fSize = document.getElementById('filter-size').value;
+
+            filteredData = allData.filter(item => {
+                let match = true;
+                if(fColor !== 'all' && item.color !== fColor) match = false;
+                if(fClass !== 'all' && item.class !== fClass) match = false;
+                if(fRoom !== 'all' && item.room !== fRoom) match = false;
+                
+                if(fSize === 'missing') {
+                    if(item.size !== 'ไม่ระบุ') match = false;
+                } else if(fSize !== 'all' && item.size !== fSize) {
+                    match = false;
+                }
+                return match;
+            });
+
+            updateDashboard();
+        }
+
+        function resetFilters() {
+            document.getElementById('filter-color').value = 'all';
+            document.getElementById('filter-class').value = 'all';
+            document.getElementById('filter-room').value = 'all';
+            document.getElementById('filter-size').value = 'all';
+            applyFilters();
+        }
+
+        function updateDashboard() {
+            document.getElementById('stat-total').innerText = filteredData.length;
+            document.getElementById('stat-round').innerText = filteredData.filter(i => i.collar === 'คอกลม').length;
+            document.getElementById('stat-polo').innerText = filteredData.filter(i => i.collar === 'คอปก').length;
+            document.getElementById('showing-count').innerText = filteredData.length;
+            
+            renderTable();
+            renderShopMatrix();
+            updateCharts();
+        }
+
+        function renderTable() {
+            const tbody = document.getElementById('data-table-body');
+            const emptyState = document.getElementById('empty-state');
+            tbody.innerHTML = '';
+
+            if(filteredData.length === 0) {
+                emptyState.classList.remove('hidden');
+                emptyState.classList.add('flex');
+            } else {
+                emptyState.classList.add('hidden');
+                emptyState.classList.remove('flex');
+
+                filteredData.forEach((item, index) => {
+                    const tr = document.createElement('tr');
+                    tr.className = "hover:bg-slate-50 transition border-b border-slate-100 last:border-0";
+                    
+                    const badgeColor = getHexColor(item.color);
+                    const isMissingSize = item.size === 'ไม่ระบุ';
+                    const sizeDisplay = isMissingSize ? '<span class="text-white font-bold bg-red-500 px-2 py-1 rounded shadow-sm text-xs">ไม่มีไซส์!</span>' : item.size;
+                    
+                    tr.innerHTML = `
+                        <td class="px-6 py-4 whitespace-nowrap text-slate-500">${index + 1}</td>
+                        <td class="px-6 py-4 font-medium ${isMissingSize ? 'text-red-600' : 'text-slate-800'}">${item.fullName}</td>
+                        <td class="px-6 py-4 whitespace-nowrap text-center">${item.class}</td>
+                        <td class="px-6 py-4 whitespace-nowrap text-center text-slate-500">/${item.room}</td>
+                        <td class="px-6 py-4 whitespace-nowrap text-center">
+                            <span class="px-2.5 py-1 text-xs font-medium rounded-full text-white shadow-sm" style="background-color: ${badgeColor}; text-shadow: 0 1px 1px rgba(0,0,0,0.3);">
+                                ${item.color}
+                            </span>
+                        </td>
+                        <td class="px-6 py-4 whitespace-nowrap text-center">
+                            <span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-medium ${item.collar === 'คอกลม' ? 'bg-emerald-50 text-emerald-700 ring-1 ring-emerald-600/20' : 'bg-orange-50 text-orange-700 ring-1 ring-orange-600/20'}">
+                                ${item.collar === 'คอกลม' ? '<i class="ph ph-t-shirt"></i>' : '<i class="ph ph-shirt-folded"></i>'} ${item.collar}
+                            </span>
+                        </td>
+                        <td class="px-6 py-4 whitespace-nowrap text-center font-bold text-slate-700">${sizeDisplay}</td>
+                    `;
+                    tbody.appendChild(tr);
+                });
+            }
+        }
+
+        function renderShopMatrix() {
+            const mHead = document.getElementById('matrix-head');
+            const mBody = document.getElementById('matrix-body');
+            mHead.innerHTML = '';
+            mBody.innerHTML = '';
+
+            if(filteredData.length === 0) return;
+
+            // กรองเฉพาะไซส์ที่มีคนสั่งจริงๆ ในข้อมูลชุดนี้
+            let currentSizes = [...new Set(filteredData.map(item => item.size))].filter(s => s !== 'ไม่ระบุ');
+            currentSizes.sort((a, b) => {
+                let idxA = sizeOrder.indexOf(a); let idxB = sizeOrder.indexOf(b);
+                if (idxA === -1 && idxB === -1) return a.localeCompare(b);
+                if (idxA === -1) return 1; if (idxB === -1) return -1;
+                return idxA - idxB;
+            });
+
+            // สร้างหัวตาราง
+            mHead.innerHTML = `<th scope="col" class="px-4 py-3 bg-slate-200 border-r border-slate-300 min-w-[150px]">สี / ประเภทเสื้อ</th>`;
+            currentSizes.forEach(s => {
+                mHead.innerHTML += `<th scope="col" class="px-4 py-3 text-center border-r border-slate-200 whitespace-nowrap">${s}</th>`;
+            });
+            mHead.innerHTML += `<th scope="col" class="px-4 py-3 text-center bg-brand-100 text-brand-800 font-bold">รวม</th>`;
+
+            // จัดกลุ่มข้อมูล
+            const groups = {};
+            filteredData.forEach(item => {
+                if(item.size === 'ไม่ระบุ') return; // ไม่นำคนไม่มีไซส์มาคิดยอดสั่งร้าน
+                const groupKey = `${item.color}_${item.collar}`;
+                if(!groups[groupKey]) {
+                    groups[groupKey] = { color: item.color, collar: item.collar, sizes: {} };
+                    currentSizes.forEach(s => groups[groupKey].sizes[s] = 0);
+                }
+                groups[groupKey].sizes[item.size] = (groups[groupKey].sizes[item.size] || 0) + 1;
+            });
+
+            const sortedGroups = Object.values(groups).sort((a,b) => {
+                if(a.color !== b.color) return a.color.localeCompare(b.color);
+                return a.collar.localeCompare(b.collar);
+            });
+
+            // สร้างแถวตาราง
+            let totalBySize = {};
+            currentSizes.forEach(s => totalBySize[s] = 0);
+            let grandTotal = 0;
+
+            sortedGroups.forEach(g => {
+                const tr = document.createElement('tr');
+                tr.className = "hover:bg-slate-50";
+                
+                const dotColor = getHexColor(g.color);
+                let rowHtml = `<td class="px-4 py-3 font-medium border-r border-slate-200 flex items-center gap-2 whitespace-nowrap">
+                    <div class="w-3 h-3 rounded-full shadow-sm" style="background-color: ${dotColor}"></div>
+                    ${g.color} - ${g.collar}
+                </td>`;
+                
+                let rowTotal = 0;
+                currentSizes.forEach(s => {
+                    const count = g.sizes[s];
+                    rowTotal += count;
+                    totalBySize[s] += count;
+                    rowHtml += `<td class="px-4 py-3 text-center border-r border-slate-200 ${count > 0 ? 'text-slate-800 font-semibold' : 'text-slate-300'}">${count > 0 ? count : '-'}</td>`;
+                });
+                grandTotal += rowTotal;
+                
+                rowHtml += `<td class="px-4 py-3 text-center font-bold bg-brand-50 text-brand-700">${rowTotal}</td>`;
+                tr.innerHTML = rowHtml;
+                mBody.appendChild(tr);
+            });
+
+            // แถวสรุปยอดรวม
+            if(sortedGroups.length > 0) {
+                const ftr = document.createElement('tr');
+                ftr.className = "bg-slate-100 font-bold border-t-2 border-slate-300";
+                let ftrHtml = `<td class="px-4 py-3 border-r border-slate-300 text-right">ยอดรวมทั้งหมด</td>`;
+                currentSizes.forEach(s => {
+                    ftrHtml += `<td class="px-4 py-3 text-center border-r border-slate-300 text-brand-700">${totalBySize[s]}</td>`;
+                });
+                ftrHtml += `<td class="px-4 py-3 text-center bg-brand-200 text-brand-900 text-lg">${grandTotal}</td>`;
+                ftr.innerHTML = ftrHtml;
+                mBody.appendChild(ftr);
+            }
+        }
+
+        function updateCharts() {
+            const colorCounts = {};
+            filteredData.forEach(i => { colorCounts[i.color] = (colorCounts[i.color] || 0) + 1; });
+            const colorLabels = Object.keys(colorCounts);
+            const colorData = Object.values(colorCounts);
+            const colorBg = colorLabels.map(lbl => getHexColor(lbl));
+
+            const sizeCounts = {};
+            filteredData.forEach(i => { if(i.size !== 'ไม่ระบุ') sizeCounts[i.size] = (sizeCounts[i.size] || 0) + 1; });
+            
+            const sizeLabels = Object.keys(sizeCounts).sort((a, b) => {
+                let idxA = sizeOrder.indexOf(a); let idxB = sizeOrder.indexOf(b);
+                if (idxA === -1 && idxB === -1) return a.localeCompare(b);
+                if (idxA === -1) return 1; if (idxB === -1) return -1;
+                return idxA - idxB;
+            });
+            const sizeData = sizeLabels.map(s => sizeCounts[s]);
+
+            Chart.defaults.font.family = "'Kanit', sans-serif";
+
+            const ctxColor = document.getElementById('colorChart').getContext('2d');
+            if(chartInstances.color) chartInstances.color.destroy();
+            chartInstances.color = new Chart(ctxColor, {
+                type: 'doughnut',
+                data: {
+                    labels: colorLabels,
+                    datasets: [{ data: colorData, backgroundColor: colorBg, borderWidth: 2, borderColor: '#ffffff' }]
+                },
+                options: {
+                    responsive: true, maintainAspectRatio: false,
+                    plugins: { legend: { position: 'bottom', labels: { usePointStyle: true, padding: 20 } } },
+                    cutout: '60%'
+                }
+            });
+
+            const ctxSize = document.getElementById('sizeChart').getContext('2d');
+            if(chartInstances.size) chartInstances.size.destroy();
+            chartInstances.size = new Chart(ctxSize, {
+                type: 'bar',
+                data: {
+                    labels: sizeLabels,
+                    datasets: [{ label: 'จำนวนตัว', data: sizeData, backgroundColor: '#3b82f6', borderRadius: 4 }]
+                },
+                options: {
+                    responsive: true, maintainAspectRatio: false,
+                    plugins: { legend: { display: false } },
+                    scales: { y: { beginAtZero: true, ticks: { precision: 0, stepSize: 1 } } }
+                }
+            });
+        }
+
+        function getHexColor(colorName) {
+            for (let key in colorPalette) { if (colorName.includes(key)) return colorPalette[key]; }
+            let hash = 0;
+            for (let i = 0; i < colorName.length; i++) hash = colorName.charCodeAt(i) + ((hash << 5) - hash);
+            return `hsl(${hash % 360}, 70%, 50%)`;
+        }
+
+        function hideLoading() {
+            const overlay = document.getElementById('loading-overlay');
+            overlay.style.opacity = '0';
+            setTimeout(() => { overlay.style.display = 'none'; }, 500);
+        }
+
+        function showToast(title, message, type="info") {
+            const toast = document.getElementById('toast');
+            document.getElementById('toast-title').innerText = title;
+            document.getElementById('toast-message').innerHTML = message;
+            
+            const icon = document.getElementById('toast-icon');
+            toast.className = "fixed top-5 right-5 transform transition-transform duration-300 z-50 max-w-sm w-full bg-white rounded-lg shadow-lg border-l-4 p-4 flex items-start";
+            
+            if(type === 'success') {
+                toast.classList.add('border-brand-500'); icon.className = "ph ph-check-circle text-2xl mr-3 text-brand-500";
+            } else if (type === 'warning') {
+                toast.classList.add('border-orange-500'); icon.className = "ph ph-warning-circle text-2xl mr-3 text-orange-500";
+            }
+            
+            setTimeout(() => { toast.classList.remove('translate-x-full'); }, 10);
+            setTimeout(hideToast, 6000);
+        }
+
+        function hideToast() {
+            document.getElementById('toast').classList.add('translate-x-full');
+        }
+
+        function copyTable(tableId) {
+            const table = document.getElementById(tableId);
+            const range = document.createRange();
+            range.selectNode(table);
+            window.getSelection().removeAllRanges();
+            window.getSelection().addRange(range);
+            
+            try {
+                document.execCommand('copy');
+                window.getSelection().removeAllRanges();
+                showToast("คัดลอกสำเร็จ", "คัดลอกตารางสรุปสั่งร้านเรียบร้อยแล้ว นำไปวางใน Excel หรือ Line ได้เลย", "success");
+            } catch(err) {
+                console.error("Unable to copy", err);
+            }
+        }
+    </script>
+</body>
+</html>
